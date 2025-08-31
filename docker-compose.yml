@@ -12,8 +12,12 @@ services:
       - .:/app
     depends_on:
       - mysql-db
-    env_file:
-      - ./vars.env
+    environment:
+  MYSQL_USER: ${MYSQL_USER}
+  MYSQL_DATABASE: ${MYSQL_DATABASE}
+  MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+  MYSQL_RANDOM_ROOT_PASSWORD: ${MYSQL_RANDOM_ROOT_PASSWORD}
+
 
   mysql-db:
     image: mysql:5.7
