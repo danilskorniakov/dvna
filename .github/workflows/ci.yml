@@ -14,9 +14,15 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Build Docker images
+      - name: Cleanup Docker
         run: |
-          docker compose build
+          docker compose down -v || true
+          docker ps -aq | xargs -r docker rm -f || true
+          docker network prune -f || true
+          docker system prune -af || true
+
+      - name: Build Docker images
+        run: docker compose build
 
       - name: Run containers
         run: |
@@ -26,9 +32,11 @@ jobs:
 
       - name: Stop containers
         if: always()
-        run: docker compose down
+        run: docker compose down -v
+
 env:
   MYSQL_USER: ${{ secrets.MYSQL_USER }}
   MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE }}
   MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
   MYSQL_RANDOM_ROOT_PASSWORD: ${{ secrets.MYSQL_RANDOM_ROOT_PASSWORD }}
+
