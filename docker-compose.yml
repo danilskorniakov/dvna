@@ -12,8 +12,6 @@ services:
       - .:/app
     depends_on:
       - mysql-db
-    env_file:
-      - ./vars.env
 
   mysql-db:
     image: mysql:5.7
