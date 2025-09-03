@@ -1,0 +1,134 @@
+name: DAST ZAP
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+  workflow_dispatch: {}          # ручной запуск
+  schedule:
+    - cron: "0 2 * * 1"          # по понедельникам в 02:00 (опционально)
+
+jobs:
+  zap-baseline:
+    name: ZAP Baseline (passive)
+    runs-on: self-hosted
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      # На всякий случай освобождаем порт 9090 (если кто-то уже занял)
+      - name: Free port 9090 if busy
+        run: |
+          docker ps --format '{{.ID}} {{.Ports}}' | awk '/:9090->/ {print $1}' | xargs -r docker stop || true
+
+      - name: Build & start DVNA
+        env:
+          MYSQL_USER: ${{ secrets.MYSQL_USER }}
+          MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE }}
+          MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
+          MYSQL_RANDOM_ROOT_PASSWORD: ${{ secrets.MYSQL_RANDOM_ROOT_PASSWORD }}
+        run: |
+          docker compose build
+          docker compose up -d
+
+      - name: Wait for app (http://localhost:9090)
+        run: |
+          for i in {1..60}; do
+            if curl -fsS http://localhost:9090 >/dev/null; then
+              echo "App is up"; break
+            fi
+            sleep 2
+          done
+
+      # Запускаем ZAP в контейнере и сканим опубликованный на хост порт.
+      # Для Linux добавляем host.docker.internal, чтобы контейнер ZAP смог достучаться до хоста
+      - name: Run ZAP Baseline
+        run: |
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -v "$PWD:/zap/wrk" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py \
+              -t http://host.docker.internal:9090 \
+              -a -j -l WARN \
+              -r /zap/wrk/zap-baseline.html \
+              -x /zap/wrk/zap-baseline.xml \
+              -w /zap/wrk/zap-baseline.md || true
+
+      - name: Upload ZAP Baseline artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: zap-baseline-report
+          path: |
+            zap-baseline.html
+            zap-baseline.xml
+            zap-baseline.md
+
+      - name: Stop DVNA
+        if: always()
+        run: docker compose down
+
+  zap-full:
+    name: ZAP Full Scan (active)
+    runs-on: self-hosted
+    timeout-minutes: 60
+    needs: zap-baseline
+    # Запускаем full scan только вручную или по расписанию,
+    # чтобы не тормозить каждый push/PR
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule'
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Free port 9090 if busy
+        run: |
+          docker ps --format '{{.ID}} {{.Ports}}' | awk '/:9090->/ {print $1}' | xargs -r docker stop || true
+
+      - name: Build & start DVNA
+        env:
+          MYSQL_USER: ${{ secrets.MYSQL_USER }}
+          MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE }}
+          MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
+          MYSQL_RANDOM_ROOT_PASSWORD: ${{ secrets.MYSQL_RANDOM_ROOT_PASSWORD }}
+        run: |
+          docker compose build
+          docker compose up -d
+
+      - name: Wait for app
+        run: |
+          for i in {1..60}; do
+            if curl -fsS http://localhost:9090 >/dev/null; then
+              echo "App is up"; break
+            fi
+            sleep 2
+          done
+
+      - name: Run ZAP Full Scan (active)
+        run: |
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -v "$PWD:/zap/wrk" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-full-scan.py \
+              -t http://host.docker.internal:9090 \
+              -a -j -l WARN \
+              -r /zap/wrk/zap-full.html \
+              -x /zap/wrk/zap-full.xml || true
+
+      - name: Upload ZAP Full Scan artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: zap-full-report
+          path: |
+            zap-full.html
+            zap-full.xml
+
+      - name: Stop DVNA
+        if: always()
+        run: docker compose down
