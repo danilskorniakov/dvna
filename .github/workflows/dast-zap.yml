@@ -5,9 +5,9 @@ on:
     branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
-  workflow_dispatch: {}          # ручной запуск
+  workflow_dispatch: {}
   schedule:
-    - cron: "0 2 * * 1"          # по понедельникам в 02:00 (опционально)
+    - cron: "0 2 * * 1"
 
 jobs:
   zap-baseline:
@@ -19,7 +19,6 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v3
 
-      # На всякий случай освобождаем порт 9090 (если кто-то уже занял)
       - name: Free port 9090 if busy
         run: |
           docker ps --format '{{.ID}} {{.Ports}}' | awk '/:9090->/ {print $1}' | xargs -r docker stop || true
@@ -43,8 +42,6 @@ jobs:
             sleep 2
           done
 
-      # Запускаем ZAP в контейнере и сканим опубликованный на хост порт.
-      # Для Linux добавляем host.docker.internal, чтобы контейнер ZAP смог достучаться до хоста
       - name: Run ZAP Baseline
         run: |
           docker run --rm \
@@ -59,7 +56,7 @@ jobs:
               -w /zap/wrk/zap-baseline.md || true
 
       - name: Upload ZAP Baseline artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: zap-baseline-report
           path: |
@@ -69,15 +66,13 @@ jobs:
 
       - name: Stop DVNA
         if: always()
-        run: docker compose down
+        run: docker compose down -v
 
   zap-full:
     name: ZAP Full Scan (active)
     runs-on: self-hosted
     timeout-minutes: 60
     needs: zap-baseline
-    # Запускаем full scan только вручную или по расписанию,
-    # чтобы не тормозить каждый push/PR
     if: |
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'schedule'
@@ -122,7 +117,7 @@ jobs:
               -x /zap/wrk/zap-full.xml || true
 
       - name: Upload ZAP Full Scan artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: zap-full-report
           path: |
@@ -131,4 +126,4 @@ jobs:
 
       - name: Stop DVNA
         if: always()
-        run: docker compose down
+        run: docker compose down -v
