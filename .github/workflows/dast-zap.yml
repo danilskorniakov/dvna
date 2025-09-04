@@ -1,59 +1,45 @@
-name: DAST ZAP
+name: DAST: ZAP
 
 on:
   push:
     branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
-  workflow_dispatch: {}
-  schedule:
-    - cron: "0 2 * * 1"
+  workflow_dispatch:
 
 jobs:
   zap-baseline:
-    name: ZAP Baseline (passive)
     runs-on: self-hosted
-    timeout-minutes: 30
-
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Free port 9090 if busy
+      - name: Start DVNA
         run: |
-          docker ps --format '{{.ID}} {{.Ports}}' | awk '/:9090->/ {print $1}' | xargs -r docker stop || true
+          docker compose -f docker-compose.yml up -d
 
-      - name: Build & start DVNA
-        env:
-          MYSQL_USER: ${{ secrets.MYSQL_USER }}
-          MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE }}
-          MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
-          MYSQL_RANDOM_ROOT_PASSWORD: ${{ secrets.MYSQL_RANDOM_ROOT_PASSWORD }}
-        run: |
-          docker compose build
-          docker compose up -d
-
-      - name: Wait for app (http://localhost:9090)
+      - name: Wait for app
         run: |
           for i in {1..60}; do
-            if curl -fsS http://localhost:9090 >/dev/null; then
-              echo "App is up"; break
+            if curl -sSf http://localhost:9090 > /dev/null; then
+              echo "DVNA is up!"
+              exit 0
             fi
-            sleep 2
+            echo "Waiting for DVNA..."
+            sleep 5
           done
+          echo "DVNA failed to start"
+          exit 1
 
-      - name: Run ZAP Baseline
+      - name: Run ZAP Baseline Scan
         run: |
           docker run --rm \
-            --add-host=host.docker.internal:host-gateway \
-            -v "$PWD:/zap/wrk" \
-            ghcr.io/zaproxy/zaproxy:stable \
-            zap-baseline.py \
-              -t http://host.docker.internal:9090 \
-              -a -j -l WARN \
-              -r /zap/wrk/zap-baseline.html \
-              -x /zap/wrk/zap-baseline.xml \
-              -w /zap/wrk/zap-baseline.md || true
+            -v "${{ github.workspace }}:/zap/wrk" \
+            -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
+            -t http://host.docker.internal:9090 \
+            -r zap-baseline.html \
+            -x zap-baseline.xml \
+            -w zap-baseline.md || true
 
       - name: Upload ZAP Baseline artifacts
         uses: actions/upload-artifact@v4
@@ -65,65 +51,50 @@ jobs:
             ${{ github.workspace }}/zap-baseline.md
 
       - name: Stop DVNA
-        if: always()
-        run: docker compose down -v
+        run: docker compose -f docker-compose.yml down
 
   zap-full:
-    name: ZAP Full Scan (active)
     runs-on: self-hosted
-    timeout-minutes: 60
     needs: zap-baseline
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'schedule'
-
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Free port 9090 if busy
+      - name: Start DVNA
         run: |
-          docker ps --format '{{.ID}} {{.Ports}}' | awk '/:9090->/ {print $1}' | xargs -r docker stop || true
-
-      - name: Build & start DVNA
-        env:
-          MYSQL_USER: ${{ secrets.MYSQL_USER }}
-          MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE }}
-          MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
-          MYSQL_RANDOM_ROOT_PASSWORD: ${{ secrets.MYSQL_RANDOM_ROOT_PASSWORD }}
-        run: |
-          docker compose build
-          docker compose up -d
+          docker compose -f docker-compose.yml up -d
 
       - name: Wait for app
         run: |
           for i in {1..60}; do
-            if curl -fsS http://localhost:9090 >/dev/null; then
-              echo "App is up"; break
+            if curl -sSf http://localhost:9090 > /dev/null; then
+              echo "DVNA is up!"
+              exit 0
             fi
-            sleep 2
+            echo "Waiting for DVNA..."
+            sleep 5
           done
+          echo "DVNA failed to start"
+          exit 1
 
-      - name: Run ZAP Full Scan (active)
+      - name: Run ZAP Full Scan
         run: |
           docker run --rm \
-            --add-host=host.docker.internal:host-gateway \
-            -v "$PWD:/zap/wrk" \
-            ghcr.io/zaproxy/zaproxy:stable \
-            zap-full-scan.py \
-              -t http://host.docker.internal:9090 \
-              -a -j -l WARN \
-              -r /zap/wrk/zap-full.html \
-              -x /zap/wrk/zap-full.xml || true
+            -v "${{ github.workspace }}:/zap/wrk" \
+            -t ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py \
+            -t http://host.docker.internal:9090 \
+            -r zap-full.html \
+            -x zap-full.xml \
+            -w zap-full.md || true
 
       - name: Upload ZAP Full Scan artifacts
         uses: actions/upload-artifact@v4
         with:
           name: zap-full-report
           path: |
-            zap-full.html
-            zap-full.xml
+            ${{ github.workspace }}/zap-full.html
+            ${{ github.workspace }}/zap-full.xml
+            ${{ github.workspace }}/zap-full.md
 
       - name: Stop DVNA
-        if: always()
-        run: docker compose down -v
+        run: docker compose -f docker-compose.yml down
