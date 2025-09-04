@@ -1,4 +1,4 @@
-name: DAST: ZAP
+name: ZAP
 
 on:
   push:
