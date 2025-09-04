@@ -60,9 +60,9 @@ jobs:
         with:
           name: zap-baseline-report
           path: |
-            zap-baseline.html
-            zap-baseline.xml
-            zap-baseline.md
+            ${{ github.workspace }}/zap-baseline.html
+            ${{ github.workspace }}/zap-baseline.xml
+            ${{ github.workspace }}/zap-baseline.md
 
       - name: Stop DVNA
         if: always()
