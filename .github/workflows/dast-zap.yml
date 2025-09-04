@@ -3,7 +3,7 @@ name: DAST ZAP Scan
 on:
   workflow_dispatch:
   push:
-    branches: [ "main" ]
+    branches: [ "master" ]
   pull_request:
 
 jobs:
@@ -19,7 +19,6 @@ jobs:
         with:
           clean: false
 
-      # --- Запуск MySQL ---
       - name: Start MySQL
         run: |
           docker run -d --name dvna-mysql \
