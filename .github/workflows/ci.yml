@@ -11,27 +11,19 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      - name: Clean workspace (force)
-        run: |
-          rm -rf "$GITHUB_WORKSPACE" || true
-          mkdir -p "$GITHUB_WORKSPACE"
-
-      - name: Checkout repo
-        uses: actions/checkout@v4
-        with:
-          clean: false
-
       - name: Cleanup Docker
         run: |
+          docker compose down -v || true
           docker ps -aq | xargs -r docker rm -f || true
           docker network prune -f || true
           docker system prune -af || true
 
-      - name: Run DVNA containers
+      - name: Build Docker images
+        run: docker compose build
+
+      - name: Run containers
         run: |
-          docker run --rm --name dvna-mysql --env-file vars.env -d mysql:5.7
-          sleep 10
-          docker run --rm --name dvna-app --env-file vars.env --link dvna-mysql:mysql-db -p 9090:9090 -d appsecco/dvna
+          docker compose up -d
           sleep 10
           curl -I http://localhost:9090 || true
 
