@@ -13,9 +13,8 @@ jobs:
     steps:
       - name: Clean workspace (force)
         run: |
-          sudo rm -rf "$GITHUB_WORKSPACE" || true
-          sudo mkdir -p "$GITHUB_WORKSPACE"
-          sudo chown -R $USER:$USER "$GITHUB_WORKSPACE"
+          rm -rf "$GITHUB_WORKSPACE" || true
+          mkdir -p "$GITHUB_WORKSPACE"
 
       - name: Checkout repo
         uses: actions/checkout@v4
