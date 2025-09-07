@@ -27,16 +27,16 @@ jobs:
 
       - name: ZAP Baseline Scan
         run: |
-          docker run --rm -v $(pwd):/zap/wrk:rw -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
-            -t http://host.docker.internal:9090 \
+          docker run --rm --network="host" --user root -v $(pwd):/zap/wrk:rw -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
+            -t http://localhost:9090 \
             -r zap-baseline-report.html \
             -w zap-baseline-report.md \
             -x zap-baseline-report.xml
 
       - name: ZAP Full Scan
         run: |
-          docker run --rm -v $(pwd):/zap/wrk:rw -t ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py \
-            -t http://host.docker.internal:9090 \
+          docker run --rm --network="host" --user root -v $(pwd):/zap/wrk:rw -t ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py \
+            -t http://localhost:9090 \
             -r zap-fullscan-report.html \
             -w zap-fullscan-report.md \
             -x zap-fullscan-report.xml
