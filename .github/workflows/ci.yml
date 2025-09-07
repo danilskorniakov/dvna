@@ -2,39 +2,34 @@ name: CI Pipeline
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ master ]
   pull_request:
-    branches: [ "master" ]
+    branches: [ master ]
 
 jobs:
-  build:
-    runs-on: self-hosted
+  build-and-test:
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Cleanup Docker
-        run: |
-          docker compose down -v || true
-          docker ps -aq | xargs -r docker rm -f || true
-          docker network prune -f || true
-          docker system prune -af || true
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Build Docker images
-        run: docker compose build
-
-      - name: Run containers
+      - name: Start MySQL
         run: |
-          docker compose up -d
-          sleep 10
-          curl -I http://localhost:9090 || true
+          docker run -d --name dvna-mysql --env-file vars.env mysql:5.7
+
+      - name: Start DVNA app
+        run: |
+          docker run -d --name dvna-app --env-file vars.env --link dvna-mysql:mysql-db -p 9090:9090 appsecco/dvna
+
+      - name: Wait for app to be ready
+        run: |
+          echo "Waiting for DVNA to start..."
+          sleep 20
+          curl -I http://localhost:9090 || exit 1
 
       - name: Stop containers
         if: always()
         run: |
           docker stop dvna-app || true
           docker stop dvna-mysql || true
-
-env:
-  MYSQL_USER: ${{ secrets.MYSQL_USER }}
-  MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE }}
-  MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
-  MYSQL_RANDOM_ROOT_PASSWORD: ${{ secrets.MYSQL_RANDOM_ROOT_PASSWORD }}

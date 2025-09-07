@@ -1,39 +1,49 @@
-name: DAST ZAP Scan
+name: DAST with OWASP ZAP
 
 on:
-  push:
-    branches: [ "master" ]
-  pull_request:
-    branches: [ "master" ]
+  workflow_dispatch:
 
 jobs:
-  zap-scan:
-    runs-on: self-hosted
+  zap_scan:
+    runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Start MySQL
-        run: docker run -d --name dvna-mysql --env-file vars.env mysql:5.7
-
-      - name: Start DVNA
-        run: docker run -d --name dvna-app --env-file vars.env --link dvna-mysql:mysql-db -p 9090:9090 appsecco/dvna
-
-      - name: Wait for app
         run: |
-          for i in {1..10}; do
-            curl -s http://localhost:9090 && break
-            echo "Waiting for DVNA..."
-            sleep 5
-          done
+          docker run -d --name dvna-mysql --env-file vars.env mysql:5.7
+
+      - name: Start DVNA app
+        run: |
+          docker run -d --name dvna-app --env-file vars.env --link dvna-mysql:mysql-db -p 9090:9090 appsecco/dvna
+
+      - name: Wait for app to be ready
+        run: |
+          echo "Waiting for DVNA to start..."
+          sleep 20
+          curl -I http://localhost:9090 || exit 1
 
       - name: Run ZAP Baseline Scan
-        uses: zaproxy/action-baseline@v0.7.0
+        run: |
+          docker run --rm -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
+            -t http://host.docker.internal:9090 \
+            -r zap-baseline-report.html
+
+      - name: Run ZAP Full Scan
+        run: |
+          docker run --rm -t ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py \
+            -t http://host.docker.internal:9090 \
+            -r zap-fullscan-report.html
+
+      - name: Upload ZAP reports
+        uses: actions/upload-artifact@v3
         with:
-          target: http://localhost:9090
-          cmd_options: -I -r zap-baseline.html
-          docker_name: ghcr.io/zaproxy/zaproxy:stable
-          issue_title: ZAP Scan Baseline Report
-          fail_action: false
-          allow_issue_writing: true
+          name: zap-reports
+          path: |
+            zap-baseline-report.html
+            zap-fullscan-report.html
 
       - name: Stop containers
         if: always()
