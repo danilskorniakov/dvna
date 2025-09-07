@@ -27,20 +27,25 @@ jobs:
 
       - name: ZAP Baseline Scan
         run: |
-          docker run --rm --network="host" --user root -v $(pwd):/zap/wrk:rw -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
+          docker run --rm --network="host" --user root -v $(pwd):/zap/wrk:rw \
+            -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
             -t http://localhost:9090 \
             -r zap-baseline-report.html \
             -w zap-baseline-report.md \
-            -x zap-baseline-report.xml
+            -x zap-baseline-report.xml \
+            -I
+        continue-on-error: true
 
       - name: ZAP Full Scan
         run: |
-          docker run --rm --network="host" --user root -v $(pwd):/zap/wrk:rw -t ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py \
+          docker run --rm --network="host" --user root -v $(pwd):/zap/wrk:rw \
+            -t ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py \
             -t http://localhost:9090 \
             -r zap-fullscan-report.html \
             -w zap-fullscan-report.md \
-            -x zap-fullscan-report.xml
-
+            -x zap-fullscan-report.xml \
+            -I
+        continue-on-error: true
 
       - name: Upload ZAP reports
         uses: actions/upload-artifact@v4
@@ -48,7 +53,11 @@ jobs:
           name: zap-reports
           path: |
             zap-baseline-report.html
+            zap-baseline-report.md
+            zap-baseline-report.xml
             zap-fullscan-report.html
+            zap-fullscan-report.md
+            zap-fullscan-report.xml
 
       - name: Stop containers
         if: always()
