@@ -65,6 +65,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install Trivy
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install wget -y
+          wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.54.1_Linux-64bit.deb
+          sudo dpkg -i trivy_0.54.1_Linux-64bit.deb
+
       - name: Run Trivy config scan
         run: trivy config --exit-code 0 --severity HIGH,CRITICAL --format table --output trivy-config-report.txt .
 
