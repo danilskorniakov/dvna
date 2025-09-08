@@ -1,82 +1,50 @@
 name: Security Checks
 
 on:
-  workflow_dispatch:
   push:
-    branches: [ "master" ]
   pull_request:
+  workflow_dispatch:
 
 jobs:
-  secrets-scan:
-    name: Scan repository for secrets
+  security-checks:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run Gitleaks
+      - name: Scan repository for secrets
         uses: gitleaks/gitleaks-action@v2
         with:
-          args: detect --source . --report-path gitleaks-report.json --no-banner
+          args: detect --source . --report-format sarif --report-path gitleaks-results.sarif
 
-      - name: Upload Gitleaks report
-        uses: actions/upload-artifact@v4
-        with:
-          name: gitleaks-report
-          path: gitleaks-report.json
-
-  image-scan:
-    name: Scan Docker image with Trivy
-    runs-on: ubuntu-latest
-    needs: secrets-scan
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Docker image
-        run: docker build -t dvna-app:latest .
-
-      - name: Run Trivy scan
-        uses: aquasecurity/trivy-action@0.20.0
-        with:
-          image-ref: dvna-app:latest
-          format: 'table'
-          vuln-type: 'os,library'
-          output: trivy-report.txt
-          exit-code: '0'
-
-      - name: Upload Trivy image report
-        uses: actions/upload-artifact@v4
-        with:
-          name: trivy-image-report
-          path: trivy-report.txt
-
-  config-scan:
-    name: Scan configs with Trivy
-    runs-on: ubuntu-latest
-    needs: secrets-scan
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install Trivy
+      - name: Build DVNA image
         run: |
-          sudo apt-get update -y
-          sudo apt-get install wget -y
-          wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.54.1_Linux-64bit.deb
-          sudo dpkg -i trivy_0.54.1_Linux-64bit.deb
+          docker build -t dvna-app .
 
-      - name: Run Trivy config scan
-        run: trivy config --exit-code 0 --severity HIGH,CRITICAL --format table --output trivy-config-report.txt .
+      - name: Scan Docker image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: dvna-app
+          format: 'table'
+          exit-code: '0'
+          severity: 'HIGH,CRITICAL'
+          output: trivy-image-report.txt
 
-      - name: Upload Trivy config report
+     - name: Scan configs with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          exit-code: '0'
+          severity: 'HIGH,CRITICAL'
+          format: 'table'
+          output: trivy-config-report.txt
+
+      - name: Upload reports
         uses: actions/upload-artifact@v4
         with:
-          name: trivy-config-report
-          path: trivy-config-report.txt
+          name: security-reports
+          path: |
+            gitleaks-results.sarif
+            trivy-image-report.txt
+            trivy-config-report.txt
