@@ -31,7 +31,7 @@ jobs:
           severity: 'HIGH,CRITICAL'
           output: trivy-image-report.txt
 
-     - name: Scan configs with Trivy
+      - name: Scan configs with Trivy
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'config'
