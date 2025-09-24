@@ -46,7 +46,7 @@ jobs:
           node-version: 12
 
       - name: Install dependencies
-        run: npm install
+        run: npm install --ignore-scripts
 
       - name: Run npm audit
         run: npm audit --json > npm-audit-report.json
