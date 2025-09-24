@@ -40,6 +40,12 @@ jobs:
           format: 'table'
           output: trivy-config-report.txt
 
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run npm audit
+        run: npm audit --json > npm-audit-report.json
+
       - name: Upload reports
         uses: actions/upload-artifact@v4
         with:
@@ -48,3 +54,4 @@ jobs:
             gitleaks-results.sarif
             trivy-image-report.txt
             trivy-config-report.txt
+            npm-audit-report.json
